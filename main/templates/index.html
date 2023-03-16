@@ -1,0 +1,199 @@
+{% load static %}
+<!DOCTYPE HTML>
+<html>
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale = 1" />
+    <script src="https://use.fontawesome.com/d1341f9b7a.js"></script>
+    <!-- <link rel = "stylesheet" href = "style.css"> -->
+    <title>Musical Note Recognition</title>
+</head>
+
+<body>
+    <div class=box>
+        <h1>Musical Note Recognition</h1>
+        <p>To determine the chords from a wav file, click the upload button below to upload your file. Once you submit
+            file, you will find a table with the timestamps and chords</p>
+        <form method="post" enctype="multipart/form-data">
+            {% csrf_token %}
+            <input type="File" id="upload" accept=".wav" name="filename" />
+            <input type="submit" name="submit" />
+        </form>
+        <p>To determine the chords from a live recording, click the record button below to record the song in the
+            surrounding. Once you submit the recording, you will find a table with the timestamps and chords</p>
+        <p><button id="btnStart">START RECORDING</button>
+            <!-- <script>
+                function addCode() {
+                    document.getElementById("add_to_me").innerHTML +=  "<h3>Recording...</h3>";
+                }
+            </script> -->
+            <button id="btnStop">STOP RECORDING</button>
+        </p>
+        <!-- <script>
+                function addCode() {
+                    document.getElementById("add_to_me").innerHTML +=  "<h3>Finished Recording</h3>";
+                }  -->
+        </script>
+        </br>
+
+        <audio id="audio" controls></audio>
+        </br>
+        <p><input type="submit" name="submit" id="liveRecordSubmit" /></p>
+        <!-- <script src="FileSaver.js"></script> -->
+        <script>
+
+                let constraintObj = {
+                    audio: true,
+                    video: false
+                };
+                // width: 1280, height: 720  -- preference only
+                // facingMode: {exact: "user"}
+                // facingMode: "environment"
+
+                //handle older browsers that might implement getUserMedia in some way
+                if (navigator.mediaDevices === undefined) {
+                    navigator.mediaDevices = {};
+                    navigator.mediaDevices.getUserMedia = function (constraintObj) {
+                        let getUserMedia = navigator.webkitGetUserMedia || navigator.mozGetUserMedia;
+                        if (!getUserMedia) {
+                            return Promise.reject(new Error('getUserMedia is not implemented in this browser'));
+                        }
+                        return new Promise(function (resolve, reject) {
+                            getUserMedia.call(navigator, constraintObj, resolve, reject);
+                        });
+                    }
+                } else {
+                    navigator.mediaDevices.enumerateDevices()
+                        .then(devices => {
+                            devices.forEach(device => {
+                                console.log(device.kind.toUpperCase(), device.label);
+                                //, device.deviceId
+                            })
+                        })
+                        .catch(err => {
+                            console.log(err.name, err.message);
+                        })
+                }
+
+                navigator.mediaDevices.getUserMedia(constraintObj)
+                    .then(function (mediaStreamObj) {
+
+                        //add listeners for saving video/audio
+                        let start = document.getElementById('btnStart');
+                        let stop = document.getElementById('btnStop');
+                        let vidSave = document.getElementById('audio');
+                        let mediaRecorder = new MediaRecorder(mediaStreamObj);
+                        let submitButton = document.getElementById('liveRecordSubmit');
+                        let finalAudio = document.getElementById('finalAudio');
+                        let chunks = [];
+                        let currentAudioSaved = new Blob(chunks, { 'type': 'audio/wav;' });
+
+                        start.addEventListener('click', (ev) => {
+                            mediaRecorder.start();
+                            console.log(mediaRecorder.state);
+                        })
+                        stop.addEventListener('click', (ev) => {
+                            mediaRecorder.stop();
+                            console.log(mediaRecorder.state);
+                        });
+                        mediaRecorder.ondataavailable = function (ev) {
+                            chunks.push(ev.data);
+                        }
+                        mediaRecorder.onstop = (ev) => {
+                            let blob = new Blob(chunks, { 'type': 'audio/wav;' });
+                            chunks = [];
+                            currentAudioSaved = blob;
+                            let videoURL = window.URL.createObjectURL(blob);
+                            vidSave.src = videoURL;
+                        }
+                        submitButton.addEventListener('click', (ev) => {
+                            // console.log(currentAudioSaved)
+                            var fReader = new FileReader();
+                            fReader.readAsDataURL(currentAudioSaved);
+                            rawData = "";
+                            const formData = new FormData();
+                            formData.append('audio-file', currentAudioSaved);
+                            // const response = fetch('http://127.0.0.1:5000/postData', {
+                            //   method: 'POST',
+                            //   data: formData
+                            // })
+                            // const a = document.createElement('a');
+                            // a.setAttribute('download', 'recording');
+                            // a.setAttribute('href', window.URL.createObjectURL(currentAudioSaved));
+                            // a.click();
+                            // saveAs(currentAudioSaved, "audio.wav");
+
+                            fReader.onloadend = function (event) {
+                                // let url = 'http://127.0.0.1:5000/postData';
+                                rawData = event.target.result;
+                                // localStorage['fileName1.wav'] = rawData;
+                                // console.log(rawData)
+                                let axiosConfig = {
+                                    headers: {
+                                        'Content-Type': 'application/json'
+                                    }
+                                };
+                                axios.post(url, {
+                                    data: rawData,
+                                    upload: 0
+                                },
+                                    axiosConfig
+                                )
+                                    .then((response) => {
+                                        // console.log(response);
+                                        let videoURL = window.URL.createObjectURL(currentAudioSaved);
+                                        finalAudio.src = videoURL;
+                                    }, (error) => {
+                                        console.log(error);
+                                    });
+                                // set final audio to song
+                            }
+                        })
+                        // var chordArray = [{time : 0.3, chord : 'C'},{time : 0.5, chord : 'D'},{time : 0.7, chord : 'A'},{time : 1.4, chord : 'B'},{time : 1.7, chord : 'G'}];
+                        var timeArray = [0.5, 1.0, 1.5, 2.0, 2.5];
+                        var chordArray = ['C', 'B', 'D', 'E', 'G'];
+                        var aud = document.getElementById("finalAudio");
+                        aud.ontimeupdate = function () { myFunction() };
+                        function myFunction() {
+                            // Display the current position of the audio in a p element with id="demo"
+                            for (let x = 0; x < chordArray.length; x++) {
+                                console.log(aud.currentTime);
+                                if (aud.currentTime <= timeArray[x]) {
+                                    console.log(chordArray[x])
+                                    document.getElementById("demo").innerHTML = String(chordArray[x]);
+                                    break;
+                                }
+                            }
+                            // document.getElementById("demo").innerHTML = String(aud.currentTime.toFixed(1)) + ' hello';
+                        }
+
+                    })
+                    .catch(function (err) {
+                        console.log(err.name, err.message);
+                    });
+        </script>
+        <audio id="finalAudio" src="" controls></audio>
+        <h3 id="myHeader"></h3>
+        <div style="display: grid;grid-template-columns: repeat(10,1fr);">
+            <p>Current Note: <span id="demo"></span></p>
+            {% for i in notes %}
+            <p>{{i}}</p>
+            {% endfor %}
+        </div>
+
+        <!-- <script>
+                // Get the audio element with id="my_video_1"
+                var aud = document.getElementById("finalAudio");
+                // aud.src =
+                // Assign an ontimeupdate event to the audio element, and execute a function if the current playback position has changed
+                aud.ontimeupdate = function() {myFunction()};
+                function myFunction() {
+                  // Display the current position of the audio in a p element with id="demo"
+                  document.getElementById("demo").innerHTML = aud.currentTime;
+                }
+            </script> -->
+    </div>
+</body>
+
+</html>
